@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build artifacts (keep main.js for Obsidian)
+*.map
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# TypeScript
+*.tsbuildinfo
