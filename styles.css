@@ -1,0 +1,14 @@
+.paperstudio-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.paperstudio-password-container-hidden {
+  display: none;
+}
+
+.paperstudio-password-container-visible {
+  display: block;
+}

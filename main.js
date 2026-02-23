@@ -41,21 +41,17 @@ var ConfirmNewPublishModal = class extends import_obsidian.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h2", { text: "Document Not Found" });
+    contentEl.createEl("h2", { text: "Document not found" });
     contentEl.createEl("p", {
       text: "The previously published document was not found or you don't have access to it. Would you like to publish as a new document?"
     });
-    const buttonContainer = contentEl.createEl("div");
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.justifyContent = "flex-end";
-    buttonContainer.style.gap = "8px";
-    buttonContainer.style.marginTop = "16px";
+    const buttonContainer = contentEl.createEl("div", { cls: "paperstudio-button-container" });
     const cancelBtn = buttonContainer.createEl("button", { text: "Cancel" });
     cancelBtn.addEventListener("click", () => {
       this.close();
       this.onCancel();
     });
-    const confirmBtn = buttonContainer.createEl("button", { text: "Publish as New", cls: "mod-cta" });
+    const confirmBtn = buttonContainer.createEl("button", { text: "Publish as new", cls: "mod-cta" });
     confirmBtn.addEventListener("click", () => {
       this.close();
       this.onConfirm();
@@ -82,7 +78,8 @@ var PublishModal = class extends import_obsidian.Modal {
       toggle.setValue(false);
       toggle.onChange((value) => {
         this.passwordEnabled = value;
-        this.passwordContainer.style.display = value ? "block" : "none";
+        this.passwordContainer.removeClass("paperstudio-password-container-hidden", "paperstudio-password-container-visible");
+        this.passwordContainer.addClass(value ? "paperstudio-password-container-visible" : "paperstudio-password-container-hidden");
         if (value) {
           this.passwordInput.focus();
         } else {
@@ -90,31 +87,26 @@ var PublishModal = class extends import_obsidian.Modal {
         }
       });
     });
-    this.passwordContainer = form.createEl("div");
-    this.passwordContainer.style.display = "none";
+    this.passwordContainer = form.createEl("div", { cls: "paperstudio-password-container-hidden" });
     new import_obsidian.Setting(this.passwordContainer).setName("Password").addText((text) => {
       this.passwordInput = text.inputEl;
       text.inputEl.type = "password";
       text.setPlaceholder("Enter password...");
     });
     const buttonContainer = form.createEl("div", { cls: "paperstudio-button-container" });
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.justifyContent = "flex-end";
-    buttonContainer.style.gap = "8px";
-    buttonContainer.style.marginTop = "16px";
     const cancelBtn = buttonContainer.createEl("button", { text: "Cancel" });
     cancelBtn.addEventListener("click", () => this.close());
     const publishBtn = buttonContainer.createEl("button", { text: "Publish", cls: "mod-cta" });
-    publishBtn.addEventListener("click", async () => {
+    publishBtn.addEventListener("click", () => {
       const password = this.passwordEnabled ? this.passwordInput.value.trim() || void 0 : void 0;
       this.close();
-      await this.plugin.doPublish(this.markdown, this.sourceFile, password);
+      void this.plugin.doPublish(this.markdown, this.sourceFile, password);
     });
-    this.passwordInput.addEventListener("keydown", async (e) => {
+    this.passwordInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         const password = this.passwordEnabled ? this.passwordInput.value.trim() || void 0 : void 0;
         this.close();
-        await this.plugin.doPublish(this.markdown, this.sourceFile, password);
+        void this.plugin.doPublish(this.markdown, this.sourceFile, password);
       }
     });
   }
@@ -127,19 +119,19 @@ var PaperStudioPlugin = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
     this.addCommand({
-      id: "publish-to-paperstudio",
-      name: "Publish to Paper Studio",
+      id: "publish-note",
+      name: "Publish current note",
       checkCallback: (checking) => {
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile && activeFile.extension === "md") {
           if (!checking) {
-            this.app.vault.read(activeFile).then((content) => {
+            void this.app.vault.read(activeFile).then((content) => {
               if (!this.settings.apiKey) {
-                new import_obsidian.Notice("Please set your Paper Studio API key in settings");
+                new import_obsidian.Notice("Please set your Paper Studio API key in settings.");
                 return;
               }
               if (!content.trim()) {
-                new import_obsidian.Notice("Note is empty");
+                new import_obsidian.Notice("Note is empty.");
                 return;
               }
               new PublishModal(this.app, this, content, activeFile).open();
@@ -334,21 +326,36 @@ ${content}`;
       svg: "image/svg+xml"
     };
     const contentType = contentTypes[ext] || "image/png";
-    const blob = new Blob([arrayBuffer], { type: contentType });
-    const formData = new FormData();
-    formData.append("file", blob, file.name);
-    const response = await fetch(`${this.settings.apiUrl}/api/v1/upload-image`, {
+    const boundary = "----ObsidianPaperStudio" + Date.now();
+    const header = `--${boundary}\r
+Content-Disposition: form-data; name="file"; filename="${file.name}"\r
+Content-Type: ${contentType}\r
+\r
+`;
+    const footer = `\r
+--${boundary}--\r
+`;
+    const headerBytes = new TextEncoder().encode(header);
+    const footerBytes = new TextEncoder().encode(footer);
+    const fileBytes = new Uint8Array(arrayBuffer);
+    const body = new Uint8Array(headerBytes.length + fileBytes.length + footerBytes.length);
+    body.set(headerBytes, 0);
+    body.set(fileBytes, headerBytes.length);
+    body.set(footerBytes, headerBytes.length + fileBytes.length);
+    const response = await (0, import_obsidian.requestUrl)({
+      url: `${this.settings.apiUrl}/api/v1/upload-image`,
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.settings.apiKey}`
+        Authorization: `Bearer ${this.settings.apiKey}`,
+        "Content-Type": `multipart/form-data; boundary=${boundary}`
       },
-      body: formData
+      body: body.buffer
     });
-    if (!response.ok) {
-      const error = await response.json();
+    if (response.status >= 400) {
+      const error = response.json;
       throw new Error(error.error || "Failed to upload image");
     }
-    const data = await response.json();
+    const data = response.json;
     return data.url;
   }
   /**
@@ -410,7 +417,8 @@ ${content}`;
         }
       }
       const title = (sourceFile == null ? void 0 : sourceFile.basename) || "Untitled";
-      const response = await fetch(`${this.settings.apiUrl}/api/v1/publish`, {
+      const response = await (0, import_obsidian.requestUrl)({
+        url: `${this.settings.apiUrl}/api/v1/publish`,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -423,14 +431,14 @@ ${content}`;
           slug: existingSlug
         })
       });
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (response.status >= 400) {
+        const errorData = response.json;
         if (errorData.error === "not_found" || errorData.error === "not_owner") {
           loadingNotice.hide();
           new ConfirmNewPublishModal(
             this.app,
             () => {
-              this.doPublish(markdown, sourceFile, password, true);
+              void this.doPublish(markdown, sourceFile, password, true);
             },
             () => {
               new import_obsidian.Notice("Publish cancelled");
@@ -440,7 +448,7 @@ ${content}`;
         }
         throw new Error(errorData.error || "Failed to publish");
       }
-      const data = await response.json();
+      const data = response.json;
       const fullUrl = `${this.settings.apiUrl}${data.url}`;
       if (sourceFile && data.slug) {
         const fullUrl2 = `${this.settings.apiUrl}/${data.slug}`;
@@ -468,26 +476,26 @@ var PaperStudioSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Paper Studio Settings" });
-    new import_obsidian.Setting(containerEl).setName("API Key").setDesc(
-      "Your Paper Studio API key. Get it from Settings in the Paper Studio web app."
+    new import_obsidian.Setting(containerEl).setName("Paper Studio settings").setHeading();
+    new import_obsidian.Setting(containerEl).setName("API key").setDesc(
+      "Your Paper Studio API key. Get it from settings in the Paper Studio web app."
     ).addText(
       (text) => text.setPlaceholder("ps_...").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("API URL").setDesc("Paper Studio server URL (change only for self-hosted instances)").addText(
+    new import_obsidian.Setting(containerEl).setName("API url").setDesc("Paper Studio server URL (change only for self-hosted instances)").addText(
       (text) => text.setPlaceholder("https://paperstudio.ink").setValue(this.plugin.settings.apiUrl).onChange(async (value) => {
         this.plugin.settings.apiUrl = value || DEFAULT_SETTINGS.apiUrl;
         await this.plugin.saveSettings();
       })
     );
-    containerEl.createEl("h3", { text: "Usage" });
+    new import_obsidian.Setting(containerEl).setName("Usage").setHeading();
     containerEl.createEl("p", {
       text: 'Open a note and use the command palette (Ctrl/Cmd + P) to run "Publish to Paper Studio". The shareable link will be copied to your clipboard.'
     });
-    containerEl.createEl("h3", { text: "Images" });
+    new import_obsidian.Setting(containerEl).setName("Images").setHeading();
     containerEl.createEl("p", {
       text: "Local images in your notes are automatically uploaded when publishing. Supported formats: PNG, JPEG, GIF, WebP, SVG."
     });

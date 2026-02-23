@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
+import { App, Modal, Notice, Plugin, PluginSettingTab, requestUrl, Setting, TFile } from "obsidian";
 
 interface PaperStudioSettings {
   apiKey: string;
@@ -31,16 +31,12 @@ class ConfirmNewPublishModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    contentEl.createEl("h2", { text: "Document Not Found" });
+    contentEl.createEl("h2", { text: "Document not found" });
     contentEl.createEl("p", {
       text: "The previously published document was not found or you don't have access to it. Would you like to publish as a new document?",
     });
 
-    const buttonContainer = contentEl.createEl("div");
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.justifyContent = "flex-end";
-    buttonContainer.style.gap = "8px";
-    buttonContainer.style.marginTop = "16px";
+    const buttonContainer = contentEl.createEl("div", { cls: "paperstudio-button-container" });
 
     const cancelBtn = buttonContainer.createEl("button", { text: "Cancel" });
     cancelBtn.addEventListener("click", () => {
@@ -48,7 +44,7 @@ class ConfirmNewPublishModal extends Modal {
       this.onCancel();
     });
 
-    const confirmBtn = buttonContainer.createEl("button", { text: "Publish as New", cls: "mod-cta" });
+    const confirmBtn = buttonContainer.createEl("button", { text: "Publish as new", cls: "mod-cta" });
     confirmBtn.addEventListener("click", () => {
       this.close();
       this.onConfirm();
@@ -91,7 +87,8 @@ class PublishModal extends Modal {
         toggle.setValue(false);
         toggle.onChange((value) => {
           this.passwordEnabled = value;
-          this.passwordContainer.style.display = value ? "block" : "none";
+          this.passwordContainer.removeClass("paperstudio-password-container-hidden", "paperstudio-password-container-visible");
+          this.passwordContainer.addClass(value ? "paperstudio-password-container-visible" : "paperstudio-password-container-hidden");
           if (value) {
             this.passwordInput.focus();
           } else {
@@ -101,8 +98,7 @@ class PublishModal extends Modal {
       });
 
     // Password field (hidden by default)
-    this.passwordContainer = form.createEl("div");
-    this.passwordContainer.style.display = "none";
+    this.passwordContainer = form.createEl("div", { cls: "paperstudio-password-container-hidden" });
 
     new Setting(this.passwordContainer)
       .setName("Password")
@@ -114,27 +110,23 @@ class PublishModal extends Modal {
 
     // Buttons
     const buttonContainer = form.createEl("div", { cls: "paperstudio-button-container" });
-    buttonContainer.style.display = "flex";
-    buttonContainer.style.justifyContent = "flex-end";
-    buttonContainer.style.gap = "8px";
-    buttonContainer.style.marginTop = "16px";
 
     const cancelBtn = buttonContainer.createEl("button", { text: "Cancel" });
     cancelBtn.addEventListener("click", () => this.close());
 
     const publishBtn = buttonContainer.createEl("button", { text: "Publish", cls: "mod-cta" });
-    publishBtn.addEventListener("click", async () => {
+    publishBtn.addEventListener("click", () => {
       const password = this.passwordEnabled ? this.passwordInput.value.trim() || undefined : undefined;
       this.close();
-      await this.plugin.doPublish(this.markdown, this.sourceFile, password);
+      void this.plugin.doPublish(this.markdown, this.sourceFile, password);
     });
 
     // Allow Enter key to submit
-    this.passwordInput.addEventListener("keydown", async (e) => {
+    this.passwordInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         const password = this.passwordEnabled ? this.passwordInput.value.trim() || undefined : undefined;
         this.close();
-        await this.plugin.doPublish(this.markdown, this.sourceFile, password);
+        void this.plugin.doPublish(this.markdown, this.sourceFile, password);
       }
     });
   }
@@ -153,8 +145,8 @@ export default class PaperStudioPlugin extends Plugin {
 
     // Add command to publish current note
     this.addCommand({
-      id: "publish-to-paperstudio",
-      name: "Publish to Paper Studio",
+      id: "publish-note",
+      name: "Publish current note",
       checkCallback: (checking: boolean) => {
         const activeFile = this.app.workspace.getActiveFile();
 
@@ -162,14 +154,14 @@ export default class PaperStudioPlugin extends Plugin {
         if (activeFile && activeFile.extension === "md") {
           if (!checking) {
             // Execute the command
-            this.app.vault.read(activeFile).then(content => {
+            void this.app.vault.read(activeFile).then(content => {
               if (!this.settings.apiKey) {
-                new Notice("Please set your Paper Studio API key in settings");
+                new Notice("Please set your Paper Studio API key in settings.");
                 return;
               }
 
               if (!content.trim()) {
-                new Notice("Note is empty");
+                new Notice("Note is empty.");
                 return;
               }
 
@@ -408,26 +400,36 @@ export default class PaperStudioPlugin extends Plugin {
     };
     const contentType = contentTypes[ext] || "image/png";
 
-    // Create blob with explicit content type (required for server validation)
-    const blob = new Blob([arrayBuffer], { type: contentType });
+    // Build multipart/form-data body manually for requestUrl
+    const boundary = "----ObsidianPaperStudio" + Date.now();
+    const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.name}"\r\nContent-Type: ${contentType}\r\n\r\n`;
+    const footer = `\r\n--${boundary}--\r\n`;
 
-    const formData = new FormData();
-    formData.append("file", blob, file.name);
+    const headerBytes = new TextEncoder().encode(header);
+    const footerBytes = new TextEncoder().encode(footer);
+    const fileBytes = new Uint8Array(arrayBuffer);
 
-    const response = await fetch(`${this.settings.apiUrl}/api/v1/upload-image`, {
+    const body = new Uint8Array(headerBytes.length + fileBytes.length + footerBytes.length);
+    body.set(headerBytes, 0);
+    body.set(fileBytes, headerBytes.length);
+    body.set(footerBytes, headerBytes.length + fileBytes.length);
+
+    const response = await requestUrl({
+      url: `${this.settings.apiUrl}/api/v1/upload-image`,
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.settings.apiKey}`,
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
       },
-      body: formData,
+      body: body.buffer,
     });
 
-    if (!response.ok) {
-      const error = await response.json();
+    if (response.status >= 400) {
+      const error = response.json;
       throw new Error(error.error || "Failed to upload image");
     }
 
-    const data = await response.json();
+    const data = response.json;
     return data.url;
   }
 
@@ -508,7 +510,8 @@ export default class PaperStudioPlugin extends Plugin {
 
       const title = sourceFile?.basename || "Untitled";
 
-      const response = await fetch(`${this.settings.apiUrl}/api/v1/publish`, {
+      const response = await requestUrl({
+        url: `${this.settings.apiUrl}/api/v1/publish`,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -522,8 +525,8 @@ export default class PaperStudioPlugin extends Plugin {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (response.status >= 400) {
+        const errorData = response.json;
 
         // Handle not_found or not_owner errors
         if (errorData.error === "not_found" || errorData.error === "not_owner") {
@@ -533,7 +536,7 @@ export default class PaperStudioPlugin extends Plugin {
             this.app,
             () => {
               // User confirmed: publish as new (without slug)
-              this.doPublish(markdown, sourceFile, password, true);
+              void this.doPublish(markdown, sourceFile, password, true);
             },
             () => {
               // User cancelled
@@ -546,7 +549,7 @@ export default class PaperStudioPlugin extends Plugin {
         throw new Error(errorData.error || "Failed to publish");
       }
 
-      const data = await response.json();
+      const data = response.json;
       const fullUrl = `${this.settings.apiUrl}${data.url}`;
 
       // Update frontmatter with full URL if we have a source file
@@ -587,12 +590,12 @@ class PaperStudioSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Paper Studio Settings" });
+    new Setting(containerEl).setName("Paper Studio settings").setHeading();
 
     new Setting(containerEl)
-      .setName("API Key")
+      .setName("API key")
       .setDesc(
-        "Your Paper Studio API key. Get it from Settings in the Paper Studio web app."
+        "Your Paper Studio API key. Get it from settings in the Paper Studio web app."
       )
       .addText((text) =>
         text
@@ -605,7 +608,7 @@ class PaperStudioSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("API URL")
+      .setName("API url")
       .setDesc("Paper Studio server URL (change only for self-hosted instances)")
       .addText((text) =>
         text
@@ -617,12 +620,12 @@ class PaperStudioSettingTab extends PluginSettingTab {
           })
       );
 
-    containerEl.createEl("h3", { text: "Usage" });
+    new Setting(containerEl).setName("Usage").setHeading();
     containerEl.createEl("p", {
       text: 'Open a note and use the command palette (Ctrl/Cmd + P) to run "Publish to Paper Studio". The shareable link will be copied to your clipboard.',
     });
 
-    containerEl.createEl("h3", { text: "Images" });
+    new Setting(containerEl).setName("Images").setHeading();
     containerEl.createEl("p", {
       text: "Local images in your notes are automatically uploaded when publishing. Supported formats: PNG, JPEG, GIF, WebP, SVG.",
     });
