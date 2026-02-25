@@ -31,7 +31,7 @@ class ConfirmNewPublishModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    contentEl.createEl("h2", { text: "Document not found" });
+    new Setting(contentEl).setName("Document not found").setHeading();
     contentEl.createEl("p", {
       text: "The previously published document was not found or you don't have access to it. Would you like to publish as a new document?",
     });
@@ -75,7 +75,7 @@ class PublishModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    contentEl.createEl("h2", { text: "Publish to Paper Studio" });
+    new Setting(contentEl).setName("Publish to Paper Studio").setHeading();
 
     const form = contentEl.createEl("div", { cls: "paperstudio-publish-form" });
 

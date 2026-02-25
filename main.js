@@ -41,7 +41,7 @@ var ConfirmNewPublishModal = class extends import_obsidian.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h2", { text: "Document not found" });
+    new import_obsidian.Setting(contentEl).setName("Document not found").setHeading();
     contentEl.createEl("p", {
       text: "The previously published document was not found or you don't have access to it. Would you like to publish as a new document?"
     });
@@ -72,7 +72,7 @@ var PublishModal = class extends import_obsidian.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h2", { text: "Publish to Paper Studio" });
+    new import_obsidian.Setting(contentEl).setName("Publish to Paper Studio").setHeading();
     const form = contentEl.createEl("div", { cls: "paperstudio-publish-form" });
     new import_obsidian.Setting(form).setName("Password protect").setDesc("Require a password to view this document").addToggle((toggle) => {
       toggle.setValue(false);
