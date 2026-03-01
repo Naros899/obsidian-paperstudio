@@ -75,7 +75,7 @@ class PublishModal extends Modal {
   onOpen() {
     const { contentEl } = this;
 
-    new Setting(contentEl).setName("Publish to Paper Studio").setHeading();
+    new Setting(contentEl).setName("Publish document").setHeading();
 
     const form = contentEl.createEl("div", { cls: "paperstudio-publish-form" });
 
@@ -156,7 +156,7 @@ export default class PaperStudioPlugin extends Plugin {
             // Execute the command
             void this.app.vault.read(activeFile).then(content => {
               if (!this.settings.apiKey) {
-                new Notice("Please set your Paper Studio API key in settings.");
+                new Notice("Please set your API key in settings.");
                 return;
               }
 
@@ -590,16 +590,16 @@ class PaperStudioSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    new Setting(containerEl).setName("Paper Studio settings").setHeading();
+    new Setting(containerEl).setName("Connection").setHeading();
 
     new Setting(containerEl)
       .setName("API key")
       .setDesc(
-        "Your Paper Studio API key. Get it from settings in the Paper Studio web app."
+        "Your API key from paperstudio.ink. Find it in your account settings."
       )
       .addText((text) =>
         text
-          .setPlaceholder("ps_...")
+          .setPlaceholder("Paste key here")
           .setValue(this.plugin.settings.apiKey)
           .onChange(async (value) => {
             this.plugin.settings.apiKey = value;
@@ -608,8 +608,8 @@ class PaperStudioSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("API url")
-      .setDesc("Paper Studio server URL (change only for self-hosted instances)")
+      .setName("API URL")
+      .setDesc("Server URL (change only for self-hosted instances)")
       .addText((text) =>
         text
           .setPlaceholder("https://paperstudio.ink")
@@ -627,7 +627,7 @@ class PaperStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Images").setHeading();
     containerEl.createEl("p", {
-      text: "Local images in your notes are automatically uploaded when publishing. Supported formats: PNG, JPEG, GIF, WebP, SVG.",
+      text: "Local images (PNG, JPEG, GIF, WebP, SVG) in your notes are automatically uploaded when publishing.",
     });
   }
 }

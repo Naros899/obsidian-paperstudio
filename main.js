@@ -72,7 +72,7 @@ var PublishModal = class extends import_obsidian.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    new import_obsidian.Setting(contentEl).setName("Publish to Paper Studio").setHeading();
+    new import_obsidian.Setting(contentEl).setName("Publish document").setHeading();
     const form = contentEl.createEl("div", { cls: "paperstudio-publish-form" });
     new import_obsidian.Setting(form).setName("Password protect").setDesc("Require a password to view this document").addToggle((toggle) => {
       toggle.setValue(false);
@@ -127,7 +127,7 @@ var PaperStudioPlugin = class extends import_obsidian.Plugin {
           if (!checking) {
             void this.app.vault.read(activeFile).then((content) => {
               if (!this.settings.apiKey) {
-                new import_obsidian.Notice("Please set your Paper Studio API key in settings.");
+                new import_obsidian.Notice("Please set your API key in settings.");
                 return;
               }
               if (!content.trim()) {
@@ -476,16 +476,16 @@ var PaperStudioSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Paper Studio settings").setHeading();
+    new import_obsidian.Setting(containerEl).setName("Connection").setHeading();
     new import_obsidian.Setting(containerEl).setName("API key").setDesc(
-      "Your Paper Studio API key. Get it from settings in the Paper Studio web app."
+      "Your API key from paperstudio.ink. Find it in your account settings."
     ).addText(
-      (text) => text.setPlaceholder("ps_...").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
+      (text) => text.setPlaceholder("Paste key here").setValue(this.plugin.settings.apiKey).onChange(async (value) => {
         this.plugin.settings.apiKey = value;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("API url").setDesc("Paper Studio server URL (change only for self-hosted instances)").addText(
+    new import_obsidian.Setting(containerEl).setName("API URL").setDesc("Server URL (change only for self-hosted instances)").addText(
       (text) => text.setPlaceholder("https://paperstudio.ink").setValue(this.plugin.settings.apiUrl).onChange(async (value) => {
         this.plugin.settings.apiUrl = value || DEFAULT_SETTINGS.apiUrl;
         await this.plugin.saveSettings();
@@ -497,7 +497,7 @@ var PaperStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     new import_obsidian.Setting(containerEl).setName("Images").setHeading();
     containerEl.createEl("p", {
-      text: "Local images in your notes are automatically uploaded when publishing. Supported formats: PNG, JPEG, GIF, WebP, SVG."
+      text: "Local images (PNG, JPEG, GIF, WebP, SVG) in your notes are automatically uploaded when publishing."
     });
   }
 };
