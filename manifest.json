@@ -1,7 +1,7 @@
 {
   "id": "paperstudio",
   "name": "Paper Studio",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "minAppVersion": "0.15.0",
   "description": "Publish your notes to Paper Studio and get beautiful shareable HTML documents.",
   "author": "Paper Studio",

@@ -497,7 +497,7 @@ var PaperStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     new import_obsidian.Setting(containerEl).setName("Images").setHeading();
     containerEl.createEl("p", {
-      text: "Local images (PNG, JPEG, GIF, WebP, SVG) in your notes are automatically uploaded when publishing."
+      text: "Local images in your notes are automatically uploaded when publishing."
     });
   }
 };

@@ -627,7 +627,7 @@ class PaperStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName("Images").setHeading();
     containerEl.createEl("p", {
-      text: "Local images (PNG, JPEG, GIF, WebP, SVG) in your notes are automatically uploaded when publishing.",
+      text: "Local images in your notes are automatically uploaded when publishing.",
     });
   }
 }
